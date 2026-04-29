@@ -1,0 +1,2162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <!--
+    智能点餐系统 - 网页客户端 v2.0
+    ================================
+    这是一个完整的网页版点餐系统前端，采用HTML5 + CSS3 + JavaScript开发。
+
+    与v1.0的主要区别：
+    - 使用HTTP轮询替代WebSocket，避免WebSocket连接问题
+    - 轮询间隔：每2秒检查一次服务器更新
+    - 通过REST API与后端通信
+
+    主要功能：
+    1. 响应式设计，适配手机和电脑端
+    2. 菜单浏览与分类切换
+    3. 购物车管理（加减商品、删除、清空）
+    4. 订单提交与确认
+    5. 一键呼叫服务
+    6. 在线聊天功能
+
+    作者：智能点餐系统
+    版本：v2.0
+    -->
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="智能点餐系统 - 便捷的在线点餐服务">
+    <meta name="theme-color" content="#FF6B35">
+
+    <title>智能点餐系统</title>
+
+    <style>
+        /*
+        CSS样式说明：
+        ===========
+        本样式表采用CSS变量（CSS Variables）实现主题色彩的统一管理，
+        便于后续修改和维护。整体设计采用橙色调，体现餐饮行业的温暖感。
+
+        颜色方案：
+        - 主色调：#FF6B35（橙色，代表热情和食欲）
+        - 次要色：#2E4052（深蓝灰色，用于文字和边框）
+        - 背景色：#F8F9FA（浅灰白色，简洁舒适）
+        - 成功色：#28A745（绿色，用于成功提示）
+        - 警告色：#FFC107（黄色，用于警告提示）
+        - 错误色：#DC3545（红色，用于错误提示）
+        */
+
+        /* ========== CSS变量定义 ========== */
+        :root {
+            /* 主色调 - 橙色系 */
+            --primary-color: #FF6B35;
+            --primary-dark: #E55A2B;
+            --primary-light: #FF8A5C;
+
+            /* 次要色 - 深蓝灰 */
+            --secondary-color: #2E4052;
+            --secondary-light: #4A6572;
+
+            /* 背景与卡片 */
+            --bg-color: #F8F9FA;
+            --card-bg: #FFFFFF;
+            --card-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+
+            /* 文字颜色 */
+            --text-primary: #2E4052;
+            --text-secondary: #6C757D;
+            --text-light: #FFFFFF;
+
+            /* 功能色 */
+            --success-color: #28A745;
+            --warning-color: #FFC107;
+            --error-color: #DC3545;
+            --info-color: #17A2B8;
+
+            /* 间距 */
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+
+            /* 圆角 */
+            --border-radius: 8px;
+            --border-radius-lg: 16px;
+
+            /* 动画时间 */
+            --transition-fast: 0.2s;
+            --transition-normal: 0.3s;
+        }
+
+        /* ========== 基础重置样式 ========== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        /* ========== 头部导航栏样式 ========== */
+        .header {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: var(--text-light);
+            padding: var(--spacing-md);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header h1 {
+            font-size: 1.4rem;
+            font-weight: 600;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: var(--spacing-xs);
+            background-color: #999;
+        }
+
+        .status-dot.connected {
+            background-color: var(--success-color);
+            box-shadow: 0 0 6px var(--success-color);
+        }
+
+        .status-dot.disconnected {
+            background-color: var(--error-color);
+        }
+
+        /* ========== 主容器布局 ========== */
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            padding-top: 60px;
+        }
+
+        /* ========== 登录界面样式 ========== */
+        .login-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: calc(100vh - 60px);
+            padding: var(--spacing-lg);
+            background: linear-gradient(180deg, var(--bg-color) 0%, #E9ECEF 100%);
+        }
+
+        .login-card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius-lg);
+            padding: var(--spacing-xl);
+            box-shadow: var(--card-shadow);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .login-card h2 {
+            color: var(--primary-color);
+            margin-bottom: var(--spacing-lg);
+            font-size: 1.8rem;
+        }
+
+        .login-card p {
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-lg);
+            line-height: 1.6;
+        }
+
+        .input-group {
+            margin-bottom: var(--spacing-lg);
+            text-align: left;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: var(--spacing-sm);
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: var(--spacing-md);
+            border: 2px solid #DEE2E6;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            transition: border-color var(--transition-fast);
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .input-group select {
+            width: 100%;
+            padding: var(--spacing-md);
+            border: 2px solid #DEE2E6;
+            border-radius: var(--border-radius);
+            font-size: 1.2rem;
+            font-weight: 600;
+            background-color: white;
+            color: #333;
+            cursor: pointer;
+            transition: border-color var(--transition-fast);
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 15px center;
+            background-size: 20px;
+        }
+
+        .input-group select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .input-group select option {
+            padding: 10px;
+            font-size: 1rem;
+        }
+
+        /* ========== 按钮样式 ========== */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--spacing-md) var(--spacing-lg);
+            border: none;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: var(--text-light);
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background-color: var(--secondary-color);
+            color: var(--text-light);
+        }
+
+        .btn-success {
+            background-color: var(--success-color);
+            color: var(--text-light);
+        }
+
+        .btn-danger {
+            background-color: var(--error-color);
+            color: var(--text-light);
+        }
+
+        .btn-outline {
+            background-color: transparent;
+            border: 2px solid var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .btn-outline:hover {
+            background-color: var(--primary-color);
+            color: var(--text-light);
+        }
+
+        .btn-block {
+            width: 100%;
+        }
+
+        .btn-sm {
+            padding: var(--spacing-xs) var(--spacing-sm);
+            font-size: 0.85rem;
+        }
+
+        .btn-lg {
+            padding: var(--spacing-md) var(--spacing-xl);
+            font-size: 1.1rem;
+        }
+
+        /* ========== 功能按钮区域 ========== */
+        .action-buttons {
+            display: flex;
+            gap: var(--spacing-md);
+            padding: var(--spacing-md);
+            background-color: var(--card-bg);
+            border-bottom: 1px solid #DEE2E6;
+            overflow-x: auto;
+        }
+
+        .action-btn {
+            flex: 1;
+            min-width: 100px;
+            padding: var(--spacing-md);
+            background-color: var(--bg-color);
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+
+        .action-btn:hover {
+            background-color: var(--primary-light);
+            color: var(--text-light);
+        }
+
+        .action-btn.active {
+            background-color: var(--primary-color);
+            color: var(--text-light);
+        }
+
+        .action-btn .icon {
+            font-size: 1.5rem;
+        }
+
+        .action-btn .text {
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        /* ========== 分类导航栏 ========== */
+        .category-nav {
+            display: flex;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-md);
+            background-color: var(--card-bg);
+            overflow-x: auto;
+            white-space: nowrap;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+
+        .category-nav::-webkit-scrollbar {
+            display: none;
+        }
+
+        .category-tab {
+            padding: var(--spacing-sm) var(--spacing-md);
+            background-color: var(--bg-color);
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            transition: all var(--transition-fast);
+        }
+
+        .category-tab:hover {
+            background-color: var(--primary-light);
+            color: var(--text-light);
+        }
+
+        .category-tab.active {
+            background-color: var(--primary-color);
+            color: var(--text-light);
+            font-weight: 600;
+        }
+
+        /* ========== 菜单区域 ========== */
+        .menu-section {
+            flex: 1;
+            padding: var(--spacing-md);
+            padding-bottom: 180px;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .menu-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: var(--spacing-md);
+        }
+
+        .menu-item {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: var(--card-shadow);
+            transition: transform var(--transition-fast);
+        }
+
+        .menu-item:hover {
+            transform: translateY(-4px);
+        }
+
+        .menu-item-image {
+            width: 100%;
+            height: 160px;
+            background: linear-gradient(135deg, #FFB347, #FFCC80);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+        }
+
+        .menu-item-content {
+            padding: var(--spacing-md);
+        }
+
+        .menu-item-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-xs);
+            color: var(--text-primary);
+        }
+
+        .menu-item-category {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .menu-item-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .menu-item-price {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .menu-item-price::before {
+            content: "¥";
+            font-size: 0.9rem;
+            margin-right: 2px;
+        }
+
+        .quantity-control {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .quantity-btn {
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            color: var(--text-light);
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color var(--transition-fast);
+        }
+
+        .quantity-btn:hover {
+            background-color: var(--primary-dark);
+        }
+
+        .quantity-btn:disabled {
+            background-color: #CCC;
+            cursor: not-allowed;
+        }
+
+        .quantity-num {
+            min-width: 24px;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        /* ========== 购物车区域 ========== */
+        .cart-section {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: var(--card-bg);
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+            transform: translateY(100%);
+            transition: transform var(--transition-normal);
+            max-height: 70vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .cart-section.open {
+            transform: translateY(0);
+        }
+
+        .cart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-md);
+            border-bottom: 1px solid #DEE2E6;
+            background-color: var(--bg-color);
+        }
+
+        .cart-header h3 {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .cart-count {
+            background-color: var(--primary-color);
+            color: var(--text-light);
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .cart-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .cart-items {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--spacing-md);
+        }
+
+        .cart-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-md);
+            background-color: var(--bg-color);
+            border-radius: var(--border-radius);
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .cart-item-info {
+            flex: 1;
+        }
+
+        .cart-item-name {
+            font-weight: 600;
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .cart-item-price {
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .cart-item-controls {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .cart-footer {
+            padding: var(--spacing-md);
+            border-top: 1px solid #DEE2E6;
+            background-color: var(--bg-color);
+        }
+
+        .cart-total {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-md);
+            font-size: 1.1rem;
+        }
+
+        .cart-total-price {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .cart-total-price::before {
+            content: "¥";
+            font-size: 1rem;
+        }
+
+        .cart-actions {
+            display: flex;
+            gap: var(--spacing-md);
+        }
+
+        .cart-actions .btn {
+            flex: 1;
+        }
+
+        .empty-cart {
+            text-align: center;
+            padding: var(--spacing-xl);
+            color: var(--text-secondary);
+        }
+
+        .empty-cart .icon {
+            font-size: 4rem;
+            margin-bottom: var(--spacing-md);
+        }
+
+        /* ========== 购物车浮动按钮 ========== */
+        .cart-float-btn {
+            position: fixed;
+            bottom: var(--spacing-lg);
+            right: var(--spacing-lg);
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: var(--text-light);
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--transition-fast);
+            z-index: 999;
+        }
+
+        .cart-float-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .cart-float-btn .badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background-color: var(--error-color);
+            color: var(--text-light);
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        .cart-float-btn.hidden {
+            display: none;
+        }
+
+        /* ========== 聊天区域 ========== */
+        .chat-section {
+            position: fixed;
+            top: 60px;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            max-width: 400px;
+            background: var(--card-bg);
+            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
+            transform: translateX(100%);
+            transition: transform var(--transition-normal);
+            display: flex;
+            flex-direction: column;
+            z-index: 1001;
+        }
+
+        .chat-section.open {
+            transform: translateX(0);
+        }
+
+        .chat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-md);
+            background: linear-gradient(135deg, var(--secondary-color), var(--secondary-light));
+            color: var(--text-light);
+        }
+
+        .chat-header h3 {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .chat-close {
+            background: none;
+            border: none;
+            color: var(--text-light);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--spacing-md);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .chat-message {
+            max-width: 80%;
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--border-radius);
+            word-wrap: break-word;
+        }
+
+        .chat-message.sent {
+            align-self: flex-end;
+            background-color: var(--primary-color);
+            color: var(--text-light);
+            border-bottom-right-radius: 4px;
+        }
+
+        .chat-message.received {
+            align-self: flex-start;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-message .sender {
+            font-size: 0.75rem;
+            opacity: 0.8;
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .chat-message .content {
+            line-height: 1.4;
+        }
+
+        .chat-message .time {
+            font-size: 0.7rem;
+            opacity: 0.6;
+            margin-top: var(--spacing-xs);
+            text-align: right;
+        }
+
+        .chat-input-area {
+            display: flex;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-md);
+            border-top: 1px solid #DEE2E6;
+            background-color: var(--bg-color);
+        }
+
+        .chat-input-area input {
+            flex: 1;
+            padding: var(--spacing-md);
+            border: 2px solid #DEE2E6;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+        }
+
+        .chat-input-area input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .chat-input-area button {
+            padding: var(--spacing-md) var(--spacing-lg);
+        }
+
+        /* ========== 呼叫服务面板 ========== */
+        .call-panel {
+            position: fixed;
+            top: 60px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1002;
+        }
+
+        .call-panel.show {
+            display: flex;
+        }
+
+        .call-panel-content {
+            background: var(--card-bg);
+            border-radius: var(--border-radius-lg);
+            padding: var(--spacing-xl);
+            text-align: center;
+            max-width: 350px;
+            width: 90%;
+            animation: popIn 0.3s ease;
+        }
+
+        @keyframes popIn {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .call-panel .icon {
+            font-size: 4rem;
+            margin-bottom: var(--spacing-lg);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .call-panel h3 {
+            font-size: 1.5rem;
+            margin-bottom: var(--spacing-md);
+            color: var(--primary-color);
+        }
+
+        .call-panel p {
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-lg);
+        }
+
+        /* ========== 订单确认弹窗 ========== */
+        .order-confirm-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1003;
+        }
+
+        .order-confirm-modal.show {
+            display: flex;
+        }
+
+        .order-confirm-content {
+            background: var(--card-bg);
+            border-radius: var(--border-radius-lg);
+            padding: var(--spacing-xl);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .order-confirm-content .icon {
+            font-size: 4rem;
+            color: var(--success-color);
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .order-confirm-content h3 {
+            font-size: 1.5rem;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .order-confirm-content .order-id {
+            font-size: 1.2rem;
+            color: var(--primary-color);
+            font-weight: 600;
+            margin-bottom: var(--spacing-lg);
+        }
+
+        /* ========== 提示消息 ========== */
+        .toast {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background-color: var(--secondary-color);
+            color: var(--text-light);
+            padding: var(--spacing-md) var(--spacing-lg);
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            transition: all var(--transition-normal);
+            z-index: 1004;
+            max-width: 90%;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .toast.success {
+            background-color: var(--success-color);
+        }
+
+        .toast.error {
+            background-color: var(--error-color);
+        }
+
+        .toast.warning {
+            background-color: var(--warning-color);
+            color: var(--text-primary);
+        }
+
+        /* ========== 订单历史弹窗 ========== */
+        .orders-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1003;
+        }
+
+        .orders-modal.show {
+            display: flex;
+        }
+
+        .orders-content {
+            background: var(--card-bg);
+            border-radius: var(--border-radius-lg);
+            width: 95%;
+            max-width: 600px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .orders-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-md);
+            border-bottom: 1px solid #DEE2E6;
+        }
+
+        .orders-header h3 {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .orders-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .orders-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--spacing-md);
+        }
+
+        .order-item {
+            background: var(--bg-color);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-md);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .order-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .order-item-id {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .order-item-status {
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .order-item-status.pending {
+            background-color: #FFF3CD;
+            color: #856404;
+        }
+
+        .order-item-status.confirmed {
+            background-color: #D4EDDA;
+            color: #155724;
+        }
+
+        .order-item-status.completed {
+            background-color: #CCE5FF;
+            color: #004085;
+        }
+
+        .order-item-table {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .order-item-items {
+            font-size: 0.9rem;
+            line-height: 1.6;
+            color: var(--text-primary);
+        }
+
+        .order-item-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: var(--spacing-sm);
+            padding-top: var(--spacing-sm);
+            border-top: 1px solid #DEE2E6;
+        }
+
+        .order-item-time {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .order-item-total {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        /* ========== 响应式设计 ========== */
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.1rem;
+            }
+
+            .menu-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .action-buttons {
+                justify-content: space-between;
+            }
+
+            .action-btn {
+                min-width: auto;
+                flex: 1;
+                padding: var(--spacing-sm);
+            }
+
+            .action-btn .icon {
+                font-size: 1.2rem;
+            }
+
+            .action-btn .text {
+                font-size: 0.7rem;
+            }
+
+            .cart-section {
+                max-height: 85vh;
+            }
+
+            .chat-section {
+                max-width: 100%;
+            }
+
+            .cart-actions {
+                flex-direction: column;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .menu-grid {
+                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            }
+
+            .chat-section {
+                top: 60px;
+            }
+        }
+
+        /* ========== 隐藏类 ========== */
+        .hidden {
+            display: none !important;
+        }
+
+        /* ========== 加载动画 ========== */
+        .loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: var(--spacing-xl);
+            color: var(--text-secondary);
+        }
+
+        .loading .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--bg-color);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: var(--spacing-md);
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!--
+    HTML结构说明：
+    =============
+    页面结构采用模块化设计，各功能区域独立又相互关联。
+
+    主要区域：
+    1. header - 固定顶部导航栏
+    2. login-screen - 登录/桌号输入界面
+    3. main-container - 点餐主界面（登录后显示）
+       3.1 action-buttons - 功能按钮区域
+       3.2 category-nav - 菜单分类导航
+       3.3 menu-section - 菜单展示区域
+       3.4 cart-float-btn - 购物车浮动按钮
+    4. cart-section - 购物车详情面板（从底部弹出）
+    5. chat-section - 聊天面板（从右侧滑出）
+    6. call-panel - 呼叫服务弹窗
+    7. order-confirm-modal - 订单确认弹窗
+    8. orders-modal - 订单历史弹窗
+    9. toast - 提示消息组件
+    -->
+
+    <!-- ========== 头部导航栏 ========== -->
+    <header class="header">
+        <div class="header-content">
+            <h1>🍜 智能点餐系统</h1>
+            <div class="connection-status">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">未连接</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ========== 主容器 ========== -->
+    <main class="main-container">
+        <!-- ========== 登录界面 ========== -->
+        <section class="login-screen" id="loginScreen">
+            <div class="login-card">
+                <h2>欢迎使用智能点餐系统</h2>
+                <p>请输入您的桌号开始点餐之旅</p>
+
+                <div class="input-group">
+                    <label for="tableId">桌号</label>
+                    <select id="tableId" class="table-select">
+                        <option value="" disabled selected>请选择您的桌号</option>
+                        <option value="1">1号桌</option>
+                        <option value="2">2号桌</option>
+                        <option value="3">3号桌</option>
+                        <option value="4">4号桌</option>
+                        <option value="5">5号桌</option>
+                        <option value="6">6号桌</option>
+                        <option value="7">7号桌</option>
+                        <option value="8">8号桌</option>
+                        <option value="9">9号桌</option>
+                        <option value="10">10号桌</option>
+                        <option value="11">11号桌</option>
+                        <option value="12">12号桌</option>
+                        <option value="13">13号桌</option>
+                        <option value="14">14号桌</option>
+                        <option value="15">15号桌</option>
+                    </select>
+                </div>
+
+                <button class="btn btn-primary btn-lg btn-block" onclick="enterOrdering()">
+                    进入点餐
+                </button>
+            </div>
+        </section>
+
+        <!-- ========== 点餐主界面 ========== -->
+        <section class="ordering-screen hidden" id="orderingScreen">
+            <div class="action-buttons">
+                <button class="action-btn" onclick="toggleCart()">
+                    <span class="icon">🛒</span>
+                    <span class="text">购物车</span>
+                </button>
+
+                <button class="action-btn" onclick="showCallPanel()">
+                    <span class="icon">📞</span>
+                    <span class="text">呼叫服务</span>
+                </button>
+
+                <button class="action-btn" onclick="toggleChat()">
+                    <span class="icon">💬</span>
+                    <span class="text">在线聊天</span>
+                </button>
+
+                <button class="action-btn" onclick="showOrders()">
+                    <span class="icon">📋</span>
+                    <span class="text">我的订单</span>
+                </button>
+            </div>
+
+            <nav class="category-nav" id="categoryNav"></nav>
+
+            <section class="menu-section">
+                <div class="menu-grid" id="menuGrid"></div>
+            </section>
+        </section>
+    </main>
+
+    <!-- ========== 购物车浮动按钮 ========== -->
+    <button class="cart-float-btn hidden" id="cartFloatBtn" onclick="toggleCart()">
+        🛒
+        <span class="badge" id="cartBadge">0</span>
+    </button>
+
+    <!-- ========== 购物车详情面板 ========== -->
+    <aside class="cart-section" id="cartSection">
+        <div class="cart-header">
+            <h3>
+                <span class="icon">🛒</span>
+                购物车
+                <span class="cart-count" id="cartCount">0</span>
+            </h3>
+            <button class="cart-close" onclick="toggleCart()">×</button>
+        </div>
+
+        <div class="cart-items" id="cartItems">
+            <div class="empty-cart" id="emptyCart">
+                <div class="icon">🛒</div>
+                <p>购物车是空的</p>
+                <p>快去挑选美食吧！</p>
+            </div>
+        </div>
+
+        <div class="cart-footer" id="cartFooter">
+            <div class="cart-total">
+                <span>合计</span>
+                <span class="cart-total-price" id="cartTotal">0</span>
+            </div>
+            <div class="cart-actions">
+                <button class="btn btn-danger" onclick="clearCart()">清空</button>
+                <button class="btn btn-primary btn-lg" onclick="submitOrder()">提交订单</button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ========== 聊天面板 ========== -->
+    <aside class="chat-section" id="chatSection">
+        <div class="chat-header">
+            <h3>
+                <span>💬</span>
+                在线聊天
+            </h3>
+            <button class="chat-close" onclick="toggleChat()">×</button>
+        </div>
+
+        <div class="chat-messages" id="chatMessages"></div>
+
+        <div class="chat-input-area">
+            <input type="text" id="chatInput" placeholder="输入消息..." onkeypress="handleChatKeypress(event)">
+            <button class="btn btn-primary" onclick="sendChat()">发送</button>
+        </div>
+    </aside>
+
+    <!-- ========== 呼叫服务面板 ========== -->
+    <div class="call-panel" id="callPanel" onclick="hideCallPanel()">
+        <div class="call-panel-content" onclick="event.stopPropagation()">
+            <div class="icon">📞</div>
+            <h3>呼叫服务</h3>
+            <p>服务人员即将到达，请稍候...</p>
+            <p>桌号：<strong id="callTableId">-</strong></p>
+            <button class="btn btn-primary btn-block" onclick="hideCallPanel()">取消呼叫</button>
+        </div>
+    </div>
+
+    <!-- ========== 订单确认弹窗 ========== -->
+    <div class="order-confirm-modal" id="orderConfirmModal">
+        <div class="order-confirm-content">
+            <div class="icon">✅</div>
+            <h3>订单提交成功</h3>
+            <p class="order-id" id="confirmOrderId">-</p>
+            <p>感谢您的点餐，请等候美食上桌</p>
+            <button class="btn btn-primary btn-block" onclick="hideOrderConfirm()">确定</button>
+        </div>
+    </div>
+
+    <!-- ========== 订单历史弹窗 ========== -->
+    <div class="orders-modal" id="ordersModal" onclick="hideOrders()">
+        <div class="orders-content" onclick="event.stopPropagation()">
+            <div class="orders-header">
+                <h3>
+                    <span>📋</span>
+                    订单历史
+                </h3>
+                <button class="orders-close" onclick="hideOrders()">×</button>
+            </div>
+            <div class="orders-list" id="ordersList">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>加载中...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== 提示消息 ========== -->
+    <div class="toast" id="toast">提示消息</div>
+
+    <!--
+    ========== JavaScript 脚本 (v2.0 - HTTP轮询版本) ==========
+
+    重要更新说明：
+    ===========
+    v2.0版本使用HTTP轮询替代WebSocket，原因：
+    1. WebSocket在某些网络环境下可能无法连接
+    2. HTTP轮询更加稳定，兼容性好
+    3. 通过定时调用API接口实现近实时更新
+
+    轮询策略：
+    - 每2秒检查一次服务器更新（last_update时间戳）
+    - 如果时间戳变化，则请求最新数据
+    - 避免频繁请求，减轻服务器负担
+
+    脚本结构：
+    1. 全局变量 - 存储应用状态
+    2. API通信 - 使用fetch调用后端REST API
+    3. 轮询机制 - 定时检查服务器更新
+    4. UI更新 - 渲染菜单、购物车、聊天等
+    -->
+
+    <script>
+        /*
+        ===========================================================================
+        第一部分：全局变量定义
+        ===========================================================================
+        */
+        // API基础URL，指向后端服务器
+        const API_BASE = window.location.origin;
+
+        // 当前用户的桌号
+        let currentTableId = "";
+
+        // 菜品菜单数据
+        let menuData = {};
+
+        // 当前选中的菜单分类
+        let currentCategory = "";
+
+        // 购物车数据
+        let cart = {};
+
+        // 用户订单历史
+        let userOrders = [];
+
+        // 轮询控制变量
+        let lastUpdateTime = 0;  // 记录上一次服务器更新时间
+        let pollInterval = null; // 轮询定时器ID
+        const POLL_INTERVAL_MS = 2000;  // 轮询间隔：2秒
+
+        /*
+        ===========================================================================
+        第二部分：API通信模块 (HTTP REST API)
+        ===========================================================================
+        使用fetch API调用后端REST接口
+        */
+
+        /**
+         * 发送GET请求到API
+         * @param {string} endpoint - API端点
+         * @returns {Promise<Object>} 响应数据
+         */
+        async function apiGet(endpoint) {
+            try {
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error(`API GET ${endpoint} 失败：`, error);
+                return null;
+            }
+        }
+
+        /**
+         * 发送POST请求到API
+         * @param {string} endpoint - API端点
+         * @param {Object} data - 请求数据
+         * @returns {Promise<Object>} 响应数据
+         */
+        async function apiPost(endpoint, data) {
+            try {
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error(`API POST ${endpoint} 失败：`, error);
+                return null;
+            }
+        }
+
+        /*
+        ===========================================================================
+        第三部分：菜单管理模块
+        ===========================================================================
+        */
+
+        /**
+         * 从服务器加载菜单数据
+         */
+        async function loadMenu() {
+            const data = await apiGet('/api/menu');
+
+            if (data) {
+                menuData = data.menu || {};
+                renderCategories();
+                renderMenu();
+                updateConnectionStatus(true);
+            } else {
+                updateConnectionStatus(false);
+            }
+        }
+
+        /**
+         * 渲染菜单分类导航
+         */
+        function renderCategories() {
+            const nav = document.getElementById("categoryNav");
+            const categories = Object.keys(menuData);
+
+            if (categories.length === 0) {
+                nav.innerHTML = '<span style="color: #999; padding: 8px;">暂无可用分类</span>';
+                return;
+            }
+
+            nav.innerHTML = categories.map((cat, index) => `
+                <button class="category-tab ${index === 0 ? 'active' : ''}"
+                        onclick="selectCategory('${cat}')">
+                    ${cat}
+                </button>
+            `).join('');
+
+            currentCategory = categories[0];
+        }
+
+        /**
+         * 选中指定分类
+         */
+        function selectCategory(category) {
+            currentCategory = category;
+
+            document.querySelectorAll('.category-tab').forEach(tab => {
+                tab.classList.remove('active');
+                if (tab.textContent === category) {
+                    tab.classList.add('active');
+                }
+            });
+
+            renderMenu();
+        }
+
+        /**
+         * 渲染当前分类的菜单
+         */
+        function renderMenu() {
+            const grid = document.getElementById("menuGrid");
+            const items = menuData[currentCategory] || [];
+
+            if (items.length === 0) {
+                grid.innerHTML = '<div class="loading"><p>该分类暂无菜品</p></div>';
+                return;
+            }
+
+            grid.innerHTML = items.map(item => {
+                // 使用trim确保键名一致，避免空格问题
+                const itemKey = item.name.trim();
+                const quantity = cart[itemKey] || 0;
+
+                return `
+                <div class="menu-item">
+                    <div class="menu-item-image">🍽️</div>
+                    <div class="menu-item-content">
+                        <div class="menu-item-name">${item.name}</div>
+                        <div class="menu-item-category">${item.category}</div>
+                        <div class="menu-item-footer">
+                            <div class="menu-item-price">¥${item.price}</div>
+                            <div class="quantity-control">
+                                ${quantity > 0 ? `
+                                    <button class="quantity-btn" onclick="decreaseQuantity('${itemKey}')">−</button>
+                                    <span class="quantity-num">${quantity}</span>
+                                    <button class="quantity-btn" onclick="increaseQuantity('${itemKey}', ${item.price})">+</button>
+                                ` : `
+                                    <button class="quantity-btn" onclick="increaseQuantity('${itemKey}', ${item.price})">+</button>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        /*
+        ===========================================================================
+        第四部分：购物车功能模块
+        ===========================================================================
+        */
+
+        function increaseQuantity(itemName, price) {
+            console.log(`=== increaseQuantity ===`);
+            console.log(`itemName: '${itemName}' (length: ${itemName.length})`);
+            console.log(`Before: cart['${itemName}'] =`, cart[itemName]);
+
+            if (cart[itemName]) {
+                cart[itemName]++;
+            } else {
+                cart[itemName] = 1;
+            }
+
+            console.log(`After: cart['${itemName}'] =`, cart[itemName]);
+            console.log(`Full cart:`, JSON.stringify(cart));
+
+            updateCartUI();
+            renderMenu();
+        }
+
+        function decreaseQuantity(itemName) {
+            if (cart[itemName]) {
+                if (cart[itemName] > 1) {
+                    cart[itemName]--;
+                } else {
+                    delete cart[itemName];
+                }
+            }
+
+            updateCartUI();
+            renderMenu();
+        }
+
+        // 购物车面板专用增加数量函数
+        function increaseQuantityFromCart(itemName, price) {
+            console.log(`=== increaseQuantityFromCart ===`);
+            console.log(`itemName: '${itemName}'`);
+            console.log(`Before: cart['${itemName}'] =`, cart[itemName]);
+
+            if (cart[itemName]) {
+                cart[itemName]++;
+            } else {
+                cart[itemName] = 1;
+            }
+
+            console.log(`After: cart['${itemName}'] =`, cart[itemName]);
+            console.log(`Full cart:`, JSON.stringify(cart));
+
+            updateCartUI();
+            renderMenu();
+        }
+
+        // 购物车面板专用减少数量函数
+        function decreaseQuantityFromCart(itemName) {
+            console.log(`=== decreaseQuantityFromCart ===`);
+            console.log(`itemName: '${itemName}'`);
+            console.log(`Before: cart['${itemName}'] =`, cart[itemName]);
+
+            if (cart[itemName]) {
+                if (cart[itemName] > 1) {
+                    cart[itemName]--;
+                } else {
+                    delete cart[itemName];
+                }
+            }
+
+            console.log(`After: cart['${itemName}'] =`, cart[itemName]);
+            console.log(`Full cart:`, JSON.stringify(cart));
+
+            updateCartUI();
+            renderMenu();
+        }
+
+        // 初始化购物车面板按钮事件监听
+        function initCartPanelEvents() {
+            const cartItemsEl = document.getElementById("cartItems");
+            
+            cartItemsEl.addEventListener('click', function(e) {
+                const target = e.target;
+                
+                // 找到父元素 .cart-item
+                const cartItem = target.closest('.cart-item');
+                if (!cartItem) return;
+                
+                const itemName = decodeURIComponent(cartItem.dataset.itemName);
+                const price = parseFloat(cartItem.dataset.itemPrice);
+                
+                if (target.classList.contains('quantity-plus')) {
+                    console.log(`=== Cart Plus Clicked ===`);
+                    console.log(`itemName: '${itemName}', price: ${price}`);
+                    increaseQuantity(itemName, price);
+                } else if (target.classList.contains('quantity-minus')) {
+                    console.log(`=== Cart Minus Clicked ===`);
+                    console.log(`itemName: '${itemName}'`);
+                    decreaseQuantity(itemName);
+                }
+            });
+        }
+
+        function removeFromCart(itemName) {
+            delete cart[itemName];
+            updateCartUI();
+            renderMenu();
+        }
+
+        function clearCart() {
+            console.log(`=== clearCart ===`);
+            console.log(`Before clear: cart =`, JSON.stringify(cart));
+            
+            cart = {};
+            
+            console.log(`After clear: cart =`, JSON.stringify(cart));
+            
+            updateCartUI();
+            renderMenu();
+            
+            showToast("购物车已清空", "info");
+        }
+
+        function updateCartUI() {
+            const totalCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
+            console.log(`updateCartUI called: totalCount=${totalCount}, cart=`, cart);
+
+            const badge = document.getElementById("cartBadge");
+            badge.textContent = totalCount;
+
+            const floatBtn = document.getElementById("cartFloatBtn");
+            if (totalCount > 0) {
+                floatBtn.classList.remove("hidden");
+            } else {
+                floatBtn.classList.add("hidden");
+            }
+
+            updateCartPanel();
+        }
+
+        function updateCartPanel() {
+            console.log(`=== updateCartPanel ===`);
+            console.log(`Full cart in panel:`, JSON.stringify(cart));
+
+            const cartItemsEl = document.getElementById("cartItems");
+            const cartCountEl = document.getElementById("cartCount");
+            const cartTotalEl = document.getElementById("cartTotal");
+            const emptyCartEl = document.getElementById("emptyCart");
+            const cartFooterEl = document.getElementById("cartFooter");
+
+            // 添加空值检查
+            if (!cartItemsEl || !cartCountEl || !cartTotalEl || !emptyCartEl || !cartFooterEl) {
+                console.warn("购物车面板元素未找到");
+                return;
+            }
+
+            const itemNames = Object.keys(cart);
+            console.log(`itemNames in cart:`, itemNames);
+            const totalCount = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
+            console.log(`totalCount:`, totalCount);
+
+            cartCountEl.textContent = totalCount;
+
+            if (itemNames.length === 0) {
+                emptyCartEl.style.display = "block";
+                cartFooterEl.style.display = "none";
+                cartItemsEl.innerHTML = `
+                    <div class="empty-cart">
+                        <div class="icon">🛒</div>
+                        <p>购物车是空的</p>
+                        <p>快去挑选美食吧！</p>
+                    </div>
+                `;
+                cartTotalEl.textContent = "0";
+                return;
+            }
+
+            emptyCartEl.style.display = "none";
+            cartFooterEl.style.display = "block";
+
+            let totalPrice = 0;
+
+            const itemsHtml = itemNames.map(itemKey => {
+                let price = 0;
+                
+                // 获取数量
+                const quantity = cart[itemKey] || 1;
+                
+                // 查找菜品价格
+                for (const category in menuData) {
+                    const item = menuData[category].find(i => i.name.trim() === itemKey);
+                    if (item) {
+                        price = item.price;
+                        break;
+                    }
+                }
+
+                const subtotal = price * quantity;
+                totalPrice += subtotal;
+
+                // 使用 data-* 属性存储数据，避免 onclick 事件问题
+                return `
+                <div class="cart-item">
+                    <div class="cart-item-info">
+                        <div class="cart-item-name">${itemKey}</div>
+                        <div class="cart-item-price">¥${price} × ${quantity} = ¥${subtotal}</div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+
+            cartItemsEl.innerHTML = itemsHtml;
+            cartTotalEl.textContent = totalPrice;
+        }
+
+        function toggleCart() {
+            const cartSection = document.getElementById("cartSection");
+            const isOpen = cartSection.classList.contains("open");
+            
+            if (!isOpen) {
+                // 打开购物车时，强制重新渲染面板内容
+                updateCartPanel();
+            }
+            
+            cartSection.classList.toggle("open");
+            document.getElementById("chatSection").classList.remove("open");
+        }
+
+        function hideCart() {
+            document.getElementById("cartSection").classList.remove("open");
+        }
+
+        function showCart() {
+            document.getElementById("cartSection").classList.add("open");
+        }
+
+        /*
+        ===========================================================================
+        第五部分：订单功能模块
+        ===========================================================================
+        */
+
+        async function submitOrder() {
+            const itemNames = Object.keys(cart);
+
+            if (itemNames.length === 0) {
+                showToast("购物车是空的，请先选择菜品", "warning");
+                return;
+            }
+
+            const orderItems = itemNames.map(name => ({
+                name: name,
+                quantity: cart[name]
+            }));
+
+            let totalPrice = 0;
+            for (const name of itemNames) {
+                for (const category in menuData) {
+                    // 使用trim匹配，确保键名一致
+                    const item = menuData[category].find(i => i.name.trim() === name);
+                    if (item) {
+                        totalPrice += item.price * cart[name];
+                        break;
+                    }
+                }
+            }
+
+            const orderData = {
+                table_id: currentTableId,
+                items: orderItems,
+                total_price: totalPrice
+            };
+
+            const response = await apiPost('/api/order', orderData);
+
+            if (response && response.order_id) {
+                hideCart();
+                clearCart();
+                showOrderConfirm(response.order_id);
+
+                // 刷新订单状态
+                lastUpdateTime = 0;
+            } else {
+                showToast("订单提交失败，请重试", "error");
+            }
+        }
+
+        function showOrderConfirm(orderId) {
+            const modal = document.getElementById("orderConfirmModal");
+            document.getElementById("confirmOrderId").textContent = orderId;
+            modal.classList.add("show");
+        }
+
+        function hideOrderConfirm() {
+            document.getElementById("orderConfirmModal").classList.remove("show");
+        }
+
+        async function showOrders() {
+            const modal = document.getElementById("ordersModal");
+            modal.classList.add("show");
+
+            const data = await apiGet(`/api/orders?table_id=${currentTableId}`);
+
+            if (data && data.orders) {
+                userOrders = data.orders;
+                renderOrdersList();
+            }
+        }
+
+        function hideOrders() {
+            document.getElementById("ordersModal").classList.remove("show");
+        }
+
+        function renderOrdersList() {
+            const listEl = document.getElementById("ordersList");
+
+            if (userOrders.length === 0) {
+                listEl.innerHTML = `
+                    <div class="empty-cart">
+                        <div class="icon">📋</div>
+                        <p>暂无订单记录</p>
+                    </div>
+                `;
+                return;
+            }
+
+            listEl.innerHTML = userOrders.map(order => {
+                const statusClass = order.status === "待处理" ? "pending" :
+                                   order.status === "已确认" ? "confirmed" : "completed";
+
+                const itemsStr = order.items.map(item => `${item.name} × ${item.quantity}`).join("、");
+
+                return `
+                <div class="order-item">
+                    <div class="order-item-header">
+                        <span class="order-item-id">${order.order_id}</span>
+                        <span class="order-item-status ${statusClass}">${order.status}</span>
+                    </div>
+                    <div class="order-item-table">桌号：${order.table_id}</div>
+                    <div class="order-item-items">${itemsStr}</div>
+                    <div class="order-item-footer">
+                        <span class="order-item-time">${order.create_time}</span>
+                        <span class="order-item-total">¥${order.total_price}</span>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        /*
+        ===========================================================================
+        第六部分：呼叫服务模块
+        ===========================================================================
+        */
+
+        async function showCallPanel() {
+            const panel = document.getElementById("callPanel");
+            document.getElementById("callTableId").textContent = currentTableId;
+            panel.classList.add("show");
+
+            // 发送呼叫服务请求
+            await apiPost('/api/call-service', {
+                table_id: currentTableId,
+                call_type: "服务呼叫"
+            });
+        }
+
+        function hideCallPanel() {
+            document.getElementById("callPanel").classList.remove("show");
+        }
+
+        /*
+        ===========================================================================
+        第七部分：在线聊天模块
+        ===========================================================================
+        */
+
+        async function sendChat() {
+            const input = document.getElementById("chatInput");
+            const content = input.value.trim();
+
+            if (!content) {
+                return;
+            }
+
+            const response = await apiPost('/api/chat', {
+                sender: `桌号${currentTableId}`,
+                content: content
+            });
+
+            if (response && response.message === "发送成功") {
+                addChatMessage(`桌号${currentTableId}`, content, "sent");
+            }
+
+            input.value = "";
+        }
+
+        function handleChatKeypress(event) {
+            if (event.key === "Enter") {
+                sendChat();
+            }
+        }
+
+        function addChatMessage(sender, content, type) {
+            const messagesEl = document.getElementById("chatMessages");
+
+            const now = new Date();
+            const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+            const messageEl = document.createElement("div");
+            messageEl.className = `chat-message ${type}`;
+            messageEl.innerHTML = `
+                <div class="sender">${sender}</div>
+                <div class="content">${content}</div>
+                <div class="time">${time}</div>
+            `;
+
+            messagesEl.appendChild(messageEl);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function toggleChat() {
+            document.getElementById("chatSection").classList.toggle("open");
+            document.getElementById("cartSection").classList.remove("open");
+        }
+
+        /*
+        ===========================================================================
+        第八部分：轮询机制 (HTTP Long Polling)
+        ===========================================================================
+        通过定时调用API检查服务器更新，实现近实时通信
+
+        工作原理：
+        1. 每隔2秒调用 /api/orders/poll?since=<lastUpdate>
+        2. 服务器返回 last_update 时间戳
+        3. 如果服务器时间戳 > 本地记录的时间戳，说明有新数据
+        4. 此时调用完整数据接口获取最新数据
+        */
+
+        /**
+         * 启动轮询机制
+         * 定期检查服务器更新，包括订单、呼叫、聊天等
+         */
+        function startPolling() {
+            // 清除已有的轮询定时器
+            if (pollInterval) {
+                clearInterval(pollInterval);
+            }
+
+            // 设置轮询定时器
+            pollInterval = setInterval(async () => {
+                // 检查订单更新
+                const ordersResponse = await apiGet(`/api/orders/poll?since=${lastUpdateTime}`);
+
+                if (ordersResponse && ordersResponse.has_new) {
+                    // 服务器有新数据，更新本地记录的时间戳
+                    lastUpdateTime = ordersResponse.last_update;
+
+                    // 检查是否有新订单（用于通知）
+                    if (ordersResponse.orders && ordersResponse.orders.length > 0) {
+                        console.log(`检测到${ordersResponse.orders.length}个新订单`);
+                    }
+                }
+
+                // 检查聊天消息更新
+                const chatResponse = await apiGet(`/api/chat/poll?since=${lastUpdateTime}`);
+
+                if (chatResponse && chatResponse.has_new && chatResponse.messages) {
+                    // 有新聊天消息
+                    chatResponse.messages.forEach(msg => {
+                        // 避免重复添加自己的消息
+                        if (!msg.sender || !msg.sender.includes(currentTableId)) {
+                            addChatMessage(msg.sender, msg.content, "received");
+                        }
+                    });
+                }
+
+            }, POLL_INTERVAL_MS);
+
+            console.log(`轮询已启动，间隔：${POLL_INTERVAL_MS}ms`);
+        }
+
+        /**
+         * 停止轮询机制
+         */
+        function stopPolling() {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+                console.log("轮询已停止");
+            }
+        }
+
+        /*
+        ===========================================================================
+        第九部分：登录与初始化
+        ===========================================================================
+        */
+
+        function enterOrdering() {
+            const tableInput = document.getElementById("tableId");
+            const tableId = tableInput.value.trim();
+
+            if (!tableId) {
+                showToast("请选择您的桌号", "warning");
+                tableInput.focus();
+                return;
+            }
+
+            currentTableId = tableId;
+
+            document.getElementById("loginScreen").classList.add("hidden");
+            document.getElementById("orderingScreen").classList.remove("hidden");
+
+            // 加载菜单并启动轮询
+            loadMenu().then(() => {
+                startPolling();
+            });
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusDot = document.getElementById("statusDot");
+            const statusText = document.getElementById("statusText");
+
+            if (connected) {
+                statusDot.classList.add("connected");
+                statusDot.classList.remove("disconnected");
+                statusText.textContent = "已连接";
+            } else {
+                statusDot.classList.remove("connected");
+                statusDot.classList.add("disconnected");
+                statusText.textContent = "未连接";
+            }
+        }
+
+        /*
+        ===========================================================================
+        第十部分：提示消息模块
+        ===========================================================================
+        */
+
+        function showToast(message, type = "info", duration = 3000) {
+            const toast = document.getElementById("toast");
+
+            toast.textContent = message;
+            toast.className = "toast " + type;
+
+            setTimeout(() => {
+                toast.classList.add("show");
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.remove("show");
+            }, duration);
+        }
+
+        /*
+        ===========================================================================
+        第十一部分：页面生命周期
+        ===========================================================================
+        */
+
+        document.addEventListener("DOMContentLoaded", function() {
+            // 绑定登录输入框的回车事件
+            document.getElementById("tableId").addEventListener("keypress", function(e) {
+                if (e.key === "Enter") {
+                    enterOrdering();
+                }
+            });
+
+            // 初始化购物车面板按钮事件监听
+            initCartPanelEvents();
+
+            // 尝试从本地存储加载菜单数据（用于离线显示）
+            const localMenu = localStorage.getItem("menuData");
+            if (localMenu) {
+                try {
+                    menuData = JSON.parse(localMenu);
+                    if (Object.keys(menuData).length > 0) {
+                        renderCategories();
+                        renderMenu();
+                    }
+                } catch (e) {
+                    console.error("解析本地菜单数据失败：", e);
+                }
+            }
+
+            console.log("智能点餐系统 v2.0 初始化完成");
+            console.log("使用HTTP轮询进行实时通信");
+        });
+
+        window.addEventListener("beforeunload", function() {
+            // 停止轮询
+            stopPolling();
+
+            // 保存菜单数据到本地
+            if (Object.keys(menuData).length > 0) {
+                localStorage.setItem("menuData", JSON.stringify(menuData));
+            }
+        });
+    </script>
+</body>
+</html>
